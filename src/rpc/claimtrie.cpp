@@ -34,6 +34,8 @@ UniValue getclaimsintrie(const UniValue& params, bool fHelp)
         );
     
     LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
+
     UniValue ret(UniValue::VARR);
 
     CCoinsViewCache view(pcoinsTip);
@@ -105,7 +107,7 @@ UniValue getclaimtrie(const UniValue& params, bool fHelp)
             "}\n"
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     UniValue ret(UniValue::VARR);
 
     std::vector<namedNodeType> nodes = pclaimTrie->flattenTrie();
@@ -129,6 +131,7 @@ UniValue getclaimtrie(const UniValue& params, bool fHelp)
 
 bool getValueForClaim(const COutPoint& out, std::string& sValue)
 {
+    LOCK(cs_main);
     CCoinsViewCache view(pcoinsTip);
     const CCoins* coin = view.AccessCoins(out.hash);
     if (!coin)
@@ -179,7 +182,7 @@ UniValue getvalueforname(const UniValue& params, bool fHelp)
             "\"effective amount\"    (numeric) txout amount plus amount from all supports associated with the claim\n"
             "\"height\"              (numeric) the height of the block in which this transaction is located\n"
         );
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     std::string name = params[0].get_str();
     CClaimValue claim;
     UniValue ret(UniValue::VOBJ);
@@ -306,6 +309,7 @@ UniValue getclaimsforname(const UniValue& params, bool fHelp)
         );
 
     LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     std::string name = params[0].get_str();
     claimsForNameType claimsForName = pclaimTrie->getClaimsForName(name);
     int nCurrentHeight = chainActive.Height();
@@ -370,7 +374,7 @@ UniValue getclaimbyid(const UniValue& params, bool fHelp)
                         "}\n"
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     uint160 claimId;
     claimId.SetHex(params[0].get_str());
     UniValue claim(UniValue::VOBJ);
@@ -406,7 +410,7 @@ UniValue gettotalclaimednames(const UniValue& params, bool fHelp)
             "\"total names\"                (numeric) the total number of\n"
             "                                         names in the trie\n"
         );
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     if (!pclaimTrie)
     {
         return -1;
@@ -426,7 +430,7 @@ UniValue gettotalclaims(const UniValue& params, bool fHelp)
             "\"total claims\"             (numeric) the total number\n"
             "                                       of active claims\n"
         );
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     if (!pclaimTrie)
     {
         return -1;
@@ -448,7 +452,7 @@ UniValue gettotalvalueofclaims(const UniValue& params, bool fHelp)
             "\"total value\"                 (numeric) the total value of the\n"
             "                                          claims in the trie\n"
         );
-    LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
     if (!pclaimTrie)
     {
         return -1;
@@ -488,6 +492,7 @@ UniValue getclaimsfortx(const UniValue& params, bool fHelp)
         );
 
     LOCK(cs_main);
+    LOCK_SHARED(cs_claimTrie);
 
     uint256 hash;
     hash.SetHex(params[0].get_str());

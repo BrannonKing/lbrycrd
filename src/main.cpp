@@ -57,6 +57,7 @@ using namespace std;
  */
 
 CCriticalSection cs_main;
+CSharedCriticalSection cs_claimTrie;
 
 BlockMap mapBlockIndex;
 CChain chainActive;
@@ -2235,6 +2236,7 @@ bool DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockI
     if (pindex->nHeight == Params().GetConsensus().nExtendedClaimExpirationForkHeight)
     {
         LogPrintf("Decremented past the extended claim expiration hard fork height");
+        LOCK_EXCLUSIVE(cs_claimTrie);
         pclaimTrie->setExpirationTime(Params().GetConsensus().GetExpirationTime(pindex->nHeight-1));
         trieCache.forkForExpirationChange(false);
     }
@@ -2504,6 +2506,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if (pindex->nHeight == Params().GetConsensus().nExtendedClaimExpirationForkHeight)
     {
         LogPrintf("Incremented past the extended claim expiration hard fork height");
+        LOCK_EXCLUSIVE(cs_claimTrie);
         pclaimTrie->setExpirationTime(chainparams.GetConsensus().GetExpirationTime(pindex->nHeight));
         trieCache.forkForExpirationChange(true);
     }
@@ -2895,6 +2898,7 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
         if (!CheckDiskSpace(128 * 2 * 2 * pcoinsTip->GetCacheSize()))
             return state.Error("out of disk space");
         // Flush the chainstate (which may refer to block index entries).
+        LOCK_EXCLUSIVE(cs_claimTrie);
         if (!pclaimTrie->WriteToDisk())
             return AbortNode("Failed to write to claim trie database");
         if (!pcoinsTip->Flush())
@@ -2994,6 +2998,7 @@ bool static DisconnectTip(CValidationState& state, const Consensus::Params& cons
     // Apply the block atomically to the chain state.
     int64_t nStart = GetTimeMicros();
     {
+        LOCK_EXCLUSIVE(cs_claimTrie);
         CCoinsViewCache view(pcoinsTip);
         CClaimTrieCache trieCache(pclaimTrie);
         if (!DisconnectBlock(block, state, pindexDelete, view, trieCache))
@@ -3060,6 +3065,7 @@ bool static ConnectTip(CValidationState& state, const CChainParams& chainparams,
     int64_t nTime3;
     LogPrint("bench", "  - Load block from disk: %.2fms [%.2fs]\n", (nTime2 - nTime1) * 0.001, nTimeReadFromDisk * 0.000001);
     {
+        LOCK_EXCLUSIVE(cs_claimTrie);
         CCoinsViewCache view(pcoinsTip);
         CClaimTrieCache trieCache(pclaimTrie);
         bool rv = ConnectBlock(*pblock, state, pindexNew, view, trieCache);
@@ -3871,6 +3877,7 @@ bool TestBlockValidity(CValidationState& state, const CChainParams& chainparams,
     if (fCheckpointsEnabled && !CheckIndexAgainstCheckpoint(pindexPrev, state, chainparams, block.GetHash()))
         return error("%s: CheckIndexAgainstCheckpoint(): %s", __func__, state.GetRejectReason().c_str());
 
+    LOCK_SHARED(cs_claimTrie);
     CCoinsViewCache viewNew(pcoinsTip);
     CClaimTrieCache trieCache(pclaimTrie);
     CBlockIndex indexDummy(block);
@@ -4196,6 +4203,7 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
         nCheckDepth = chainActive.Height();
     nCheckLevel = std::max(0, std::min(4, nCheckLevel));
     LogPrintf("Verifying last %i blocks at level %i\n", nCheckDepth, nCheckLevel);
+    LOCK_SHARED(cs_claimTrie);
     CCoinsViewCache coins(coinsview);
     CClaimTrieCache trieCache(pclaimTrie);
     CBlockIndex* pindexState = chainActive.Tip();
@@ -4270,6 +4278,7 @@ bool GetProofForName(const CBlockIndex* pindexProof, const std::string& name, CC
     {
         return false;
     }
+    LOCK_EXCLUSIVE(cs_claimTrie);
     CCoinsViewCache coins(pcoinsTip);
     CClaimTrieCache trieCache(pclaimTrie);
     CBlockIndex* pindexState = chainActive.Tip();

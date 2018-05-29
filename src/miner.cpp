@@ -129,6 +129,7 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
 
     {
         LOCK2(cs_main, mempool.cs);
+        LOCK_EXCLUSIVE(cs_claimTrie);
         CBlockIndex* pindexPrev = chainActive.Tip();
         const int nHeight = pindexPrev->nHeight + 1;
         pblock->nTime = GetAdjustedTime();

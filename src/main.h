@@ -141,6 +141,7 @@ struct BlockHasher
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
+extern CSharedCriticalSection cs_claimTrie;
 extern CTxMemPool mempool;
 typedef boost::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
 extern BlockMap mapBlockIndex;
@@ -553,7 +554,7 @@ extern CChain chainActive;
 /** Global variable that points to the active CCoinsView (protected by cs_main) */
 extern CCoinsViewCache *pcoinsTip;
 
-/** Global variable that points to the active CClaimTrie (protected by cs_main) */
+/** Global variable that points to the active CClaimTrie (protected by cs_claimTrie) */
 extern CClaimTrie *pclaimTrie;
 
 /** Global variable that points to the active block tree (protected by cs_main) */

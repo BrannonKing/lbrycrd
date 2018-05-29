@@ -12,6 +12,7 @@
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
+#include <boost/thread/shared_mutex.hpp>
 
 
 ////////////////////////////////////////////////
@@ -97,9 +98,27 @@ public:
     }
 };
 
-typedef CCriticalSection CDynamicCriticalSection;
 /** Wrapped boost mutex: supports waiting but not recursive locking */
-typedef AnnotatedMixin<boost::mutex> CWaitableCriticalSection;
+class CWaitableCriticalSection : public AnnotatedMixin<boost::mutex>
+{
+public:
+    ~CWaitableCriticalSection() {
+        DeleteLock((void*)this);
+    }
+};
+
+class CSharedCriticalSection : public boost::shared_mutex
+{
+public:
+    void lock() SHARED_LOCK_FUNCTION()
+    {
+        boost::shared_mutex::lock();
+    }
+
+    ~CSharedCriticalSection() {
+        DeleteLock((void*)this);
+    }
+};
 
 /** Just a typedef for boost::condition_variable, can be wrapped later if desired */
 typedef boost::condition_variable CConditionVariable;
@@ -169,11 +188,51 @@ public:
     }
 };
 
+/** Wrapper around boost::shared_lock<Mutex> */
+template <typename Mutex>
+class SCOPED_LOCKABLE CSharedMutexLock
+{
+private:
+    boost::shared_lock<Mutex> lock;
+
+    void Enter(const char* pszName, const char* pszFile, int nLine)
+    {
+        EnterCritical(pszName, pszFile, nLine, (void*)(lock.mutex()));
+#ifdef DEBUG_LOCKCONTENTION
+        if (!lock.try_lock()) {
+            PrintLockContention(pszName, pszFile, nLine);
+#endif
+        lock.lock();
+#ifdef DEBUG_LOCKCONTENTION
+        }
+#endif
+    }
+
+public:
+    CSharedMutexLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine) SHARED_LOCK_FUNCTION(mutexIn) : lock(mutexIn, boost::defer_lock)
+    {
+        if (lock.owns_lock())
+            throw std::runtime_error("Lock already owned!");
+
+        Enter(pszName, pszFile, nLine);
+    }
+
+    ~CSharedMutexLock() UNLOCK_FUNCTION()
+    {
+        LeaveCritical();
+    }
+};
+
+
 typedef CMutexLock<CCriticalSection> CCriticalBlock;
+typedef CMutexLock<CSharedCriticalSection> CExclusiveCriticalBlock; // would prefer to use decltype instead of these typedefs
+typedef CSharedMutexLock<CSharedCriticalSection> CSharedCriticalBlock;
 
 #define LOCK(cs) CCriticalBlock criticalblock(cs, #cs, __FILE__, __LINE__)
 #define LOCK2(cs1, cs2) CCriticalBlock criticalblock1(cs1, #cs1, __FILE__, __LINE__), criticalblock2(cs2, #cs2, __FILE__, __LINE__)
 #define TRY_LOCK(cs, name) CCriticalBlock name(cs, #cs, __FILE__, __LINE__, true)
+#define LOCK_EXCLUSIVE(cs) CExclusiveCriticalBlock sharedCriticalBlock(cs, #cs, __FILE__, __LINE__)
+#define LOCK_SHARED(cs) CSharedCriticalBlock sharedCriticalBlock(cs, #cs, __FILE__, __LINE__)
 
 #define ENTER_CRITICAL_SECTION(cs)                            \
     {                                                         \
