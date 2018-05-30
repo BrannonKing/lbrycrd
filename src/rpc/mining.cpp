@@ -455,6 +455,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
          );
 
     LOCK(cs_main);
+    LOCK_EXCLUSIVE(cs_claimTrie); // could be shared but the verification in TestBlockValidity below won't work with shared (and it can't lock there without a deadlock from miner.cpp)
 
     std::string strMode = "template";
     UniValue lpval = NullUniValue;
