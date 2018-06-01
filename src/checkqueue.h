@@ -159,6 +159,7 @@ public:
 
     ~CCheckQueue()
     {
+        // this is clearly wrong; we can't delete the class fields, in particular the condition vars, until the threads have stopped
     }
 
     bool IsIdle()

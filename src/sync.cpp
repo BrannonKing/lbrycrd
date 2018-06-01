@@ -159,11 +159,13 @@ static void pop_lock()
 
 void EnterCritical(const char* pszName, const char* pszFile, int nLine, void* cs, bool fTry)
 {
+    fprintf(stderr, "LOCKING: %s, %s, %d\n", pszName, pszFile, nLine);
     push_lock(cs, CLockLocation(pszName, pszFile, nLine, fTry), fTry);
 }
 
 void LeaveCritical()
 {
+    fprintf(stderr, "LEFT\n");
     pop_lock();
 }
 

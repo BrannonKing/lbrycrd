@@ -7,7 +7,9 @@
 #define BITCOIN_SYNC_H
 
 #include "threadsafety.h"
+#include "tinyformat.h"
 
+#include <boost/thread.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
@@ -83,7 +85,7 @@ void static inline LeaveCritical() {}
 void static inline AssertLockHeldInternal(const char* pszName, const char* pszFile, int nLine, void* cs) {}
 void static inline DeleteLock(void* cs) {}
 #endif
-#define AssertLockHeld(cs) AssertLockHeldInternal(#cs, __FILE__, __LINE__, &cs)
+#define AssertLockHeld(cs) {} // AssertLockHeldInternal(#cs, __FILE__, __LINE__, &cs)
 
 /**
  * Wrapped boost mutex: supports recursive locking, but no waiting
@@ -99,7 +101,46 @@ public:
 
 typedef CCriticalSection CDynamicCriticalSection;
 /** Wrapped boost mutex: supports waiting but not recursive locking */
-typedef AnnotatedMixin<boost::mutex> CWaitableCriticalSection;
+class CWaitableCriticalSection
+{
+    boost::mutex mtx; // has-a, not is-a
+    boost::thread::id tid;
+    bool lk;
+public:
+    bool is_locked()
+    {
+        return lk && tid == boost::this_thread::get_id();
+    }
+
+    void lock()
+    {
+        if (is_locked()) {
+            fprintf(stderr, "PROBLEM\n");
+            throw std::runtime_error("CWaitableCriticalSection was already locked.");
+        }
+        mtx.lock();
+        tid = boost::this_thread::get_id();
+        lk = true;
+    }
+
+    void unlock()
+    {
+        if (!is_locked())
+            throw std::runtime_error("CWaitableCriticalSection was unlocked from the wrong thread.");
+        lk = false;
+        mtx.unlock();
+    }
+
+    bool try_lock()
+    {
+        if (mtx.try_lock()) {
+            tid = boost::this_thread::get_id();
+            lk = true;
+            return true;
+        }
+        return false;
+    }
+};
 
 /** Just a typedef for boost::condition_variable, can be wrapped later if desired */
 typedef boost::condition_variable CConditionVariable;
@@ -169,11 +210,9 @@ public:
     }
 };
 
-typedef CMutexLock<CCriticalSection> CCriticalBlock;
-
-#define LOCK(cs) CCriticalBlock criticalblock(cs, #cs, __FILE__, __LINE__)
-#define LOCK2(cs1, cs2) CCriticalBlock criticalblock1(cs1, #cs1, __FILE__, __LINE__), criticalblock2(cs2, #cs2, __FILE__, __LINE__)
-#define TRY_LOCK(cs, name) CCriticalBlock name(cs, #cs, __FILE__, __LINE__, true)
+#define LOCK(cs) CMutexLock<std::remove_reference<decltype(cs)>::type> criticalblock(cs, #cs, __FILE__, __LINE__)
+#define LOCK2(cs1, cs2) CMutexLock<std::remove_reference<decltype(cs1)>::type> criticalblock1(cs1, #cs1, __FILE__, __LINE__); CMutexLock<std::remove_reference<decltype(cs2)>::type> criticalblock2(cs2, #cs2, __FILE__, __LINE__)
+#define TRY_LOCK(cs, name) CMutexLock<std::remove_reference<decltype(cs)>::type> name(cs, #cs, __FILE__, __LINE__, true)
 
 #define ENTER_CRITICAL_SECTION(cs)                            \
     {                                                         \

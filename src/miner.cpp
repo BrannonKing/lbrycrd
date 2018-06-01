@@ -127,8 +127,9 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
     int lastFewTxs = 0;
     CAmount nFees = 0;
 
+    auto internal = [&]()
     {
-        LOCK2(cs_main, mempool.cs);
+        LOCK(mempool.cs);
         CBlockIndex* pindexPrev = chainActive.Tip();
         const int nHeight = pindexPrev->nHeight + 1;
         pblock->nTime = GetAdjustedTime();
@@ -316,11 +317,11 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
                     }
                 }
             }
-            
+
             for (unsigned int i = 0; i < tx.vout.size(); ++i)
             {
                 const CTxOut& txout = tx.vout[i];
-            
+
                 std::vector<std::vector<unsigned char> > vvchParams;
                 int op;
                 if (DecodeClaimScript(txout.scriptPubKey, op, vvchParams))
@@ -450,6 +451,13 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
         if (!TestBlockValidity(state, chainparams, *pblock, pindexPrev, false, false)) {
             throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s", __func__, FormatStateMessage(state)));
         }
+    };
+
+    if (cs_main.is_locked())
+        internal();
+    else{
+        LOCK(cs_main);
+        internal();
     }
 
     return pblocktemplate.release();

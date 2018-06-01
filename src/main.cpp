@@ -56,13 +56,13 @@ using namespace std;
  * Global state
  */
 
-CCriticalSection cs_main;
+CWaitableCriticalSection cs_main;
 
 BlockMap mapBlockIndex;
 CChain chainActive;
 CBlockIndex *pindexBestHeader = NULL;
 int64_t nTimeBestReceived = 0;
-CWaitableCriticalSection csBestBlock;
+boost::mutex csBestBlock;
 CConditionVariable cvBlockChange;
 int nScriptCheckThreads = 0;
 bool fImporting = false;
@@ -1629,8 +1629,12 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 
 bool IsInitialBlockDownload()
 {
+    if (!cs_main.is_locked())
+    {
+        LOCK(cs_main);
+        return IsInitialBlockDownload();
+    }
     const CChainParams& chainParams = Params();
-    LOCK(cs_main);
     if (fImporting || fReindex)
         return true;
     if (fCheckpointsEnabled && chainActive.Height() < Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()))
@@ -1843,7 +1847,10 @@ bool CScriptCheck::operator()() {
 
 int GetSpendHeight(const CCoinsViewCache& inputs)
 {
-    LOCK(cs_main);
+    if (!cs_main.is_locked()) {
+        LOCK(cs_main);
+        return GetSpendHeight(inputs);
+    }
     CBlockIndex* pindexPrev = mapBlockIndex.find(inputs.GetBestBlock())->second;
     return pindexPrev->nHeight + 1;
 }
@@ -2285,7 +2292,7 @@ void ThreadScriptCheck() {
 // we're being fed a bad chain (blocks being generated much
 // too slowly or too quickly).
 //
-void PartitionCheck(bool (*initialDownloadCheck)(), CCriticalSection& cs, const CBlockIndex *const &bestHeader,
+void PartitionCheck(bool (*initialDownloadCheck)(), CWaitableCriticalSection& cs, const CBlockIndex *const &bestHeader,
                     int64_t nPowTargetSpacing)
 {
     if (bestHeader == NULL || initialDownloadCheck()) return;
@@ -2293,6 +2300,13 @@ void PartitionCheck(bool (*initialDownloadCheck)(), CCriticalSection& cs, const 
     static int64_t lastAlertTime = 0;
     int64_t now = GetAdjustedTime();
     if (lastAlertTime > now-60*60*24) return; // Alert at most once per day
+
+    if (!cs.is_locked())
+    {
+        LOCK(cs);
+        PartitionCheck(initialDownloadCheck, cs, bestHeader, nPowTargetSpacing);
+        return;
+    }
 
     const int SPAN_HOURS=4;
     const int SPAN_SECONDS=SPAN_HOURS*60*60;
@@ -2303,7 +2317,6 @@ void PartitionCheck(bool (*initialDownloadCheck)(), CCriticalSection& cs, const 
     std::string strWarning;
     int64_t startTime = GetAdjustedTime()-SPAN_SECONDS;
 
-    LOCK(cs);
     const CBlockIndex* i = bestHeader;
     int nBlocks = 0;
     while (i->GetBlockTime() >= startTime) {
@@ -2347,7 +2360,10 @@ static VersionBitsCache versionbitscache;
 
 int32_t ComputeBlockVersion(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
-    LOCK(cs_main);
+    if (!cs_main.is_locked()) {
+        LOCK(cs_main);
+        return ComputeBlockVersion(pindexPrev, params);
+    }
     int32_t nVersion = VERSIONBITS_TOP_BITS;
 
     for (int i = 0; i < (int)Consensus::MAX_VERSION_BITS_DEPLOYMENTS; i++) {
@@ -2814,8 +2830,12 @@ enum FlushStateMode {
  * or always and in all cases if we're in prune mode and are deleting files.
  */
 bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
+    if (!cs_main.is_locked()) {
+        LOCK(cs_main);
+        return FlushStateToDisk(state, mode);
+    }
     const CChainParams& chainparams = Params();
-    LOCK2(cs_main, cs_LastBlockFile);
+    LOCK(cs_LastBlockFile);
     static int64_t nLastWrite = 0;
     static int64_t nLastFlush = 0;
     static int64_t nLastSetChain = 0;
@@ -3108,6 +3128,7 @@ bool static ConnectTip(CValidationState& state, const CChainParams& chainparams,
  * known to be invalid (it's however far from certain to be valid).
  */
 static CBlockIndex* FindMostWorkChain() {
+    AssertLockHeld(cs_main);
     do {
         CBlockIndex *pindexNew = NULL;
 
@@ -3266,20 +3287,30 @@ bool ActivateBestChain(CValidationState &state, const CChainParams& chainparams,
         const CBlockIndex *pindexFork;
         bool fInitialDownload;
         {
-            LOCK(cs_main);
-            CBlockIndex *pindexOldTip = chainActive.Tip();
-            pindexMostWork = FindMostWorkChain();
+            auto internal = [&]()
+            {
+                CBlockIndex *pindexOldTip = chainActive.Tip();
+                pindexMostWork = FindMostWorkChain();
 
-            // Whether we have anything to do at all.
-            if (pindexMostWork == NULL || pindexMostWork == chainActive.Tip())
-                return true;
+                // Whether we have anything to do at all.
+                if (pindexMostWork == NULL || pindexMostWork == chainActive.Tip())
+                    return true;
 
-            if (!ActivateBestChainStep(state, chainparams, pindexMostWork, pblock && pblock->GetHash() == pindexMostWork->GetBlockHash() ? pblock : NULL))
-                return false;
+                if (!ActivateBestChainStep(state, chainparams, pindexMostWork,
+                                           pblock && pblock->GetHash() == pindexMostWork->GetBlockHash() ? pblock
+                                                                                                         : NULL))
+                    return false;
 
-            pindexNewTip = chainActive.Tip();
-            pindexFork = chainActive.FindFork(pindexOldTip);
-            fInitialDownload = IsInitialBlockDownload();
+                pindexNewTip = chainActive.Tip();
+                pindexFork = chainActive.FindFork(pindexOldTip);
+                fInitialDownload = IsInitialBlockDownload();
+            };
+            if (cs_main.is_locked())
+                internal();
+            else {
+                LOCK(cs_main);
+                internal();
+            }
         }
         // When we reach this point, we switched to a new tip (stored in pindexNewTip).
 
@@ -3842,21 +3873,22 @@ static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned 
 
 bool ProcessNewBlock(CValidationState& state, const CChainParams& chainparams, const CNode* pfrom, const CBlock* pblock, bool fForceProcessing, CDiskBlockPos* dbp)
 {
-    {
+    if (!cs_main.is_locked()){
         LOCK(cs_main);
-        bool fRequested = MarkBlockAsReceived(pblock->GetHash());
-        fRequested |= fForceProcessing;
-
-        // Store to disk
-        CBlockIndex *pindex = NULL;
-        bool ret = AcceptBlock(*pblock, state, chainparams, &pindex, fRequested, dbp);
-        if (pindex && pfrom) {
-            mapBlockSource[pindex->GetBlockHash()] = pfrom->GetId();
-        }
-        CheckBlockIndex(chainparams.GetConsensus());
-        if (!ret)
-            return error("%s: AcceptBlock FAILED", __func__);
+        return ProcessNewBlock(state, chainparams, pfrom, pblock, fForceProcessing, dbp);
     }
+    bool fRequested = MarkBlockAsReceived(pblock->GetHash());
+    fRequested |= fForceProcessing;
+
+    // Store to disk
+    CBlockIndex *pindex = NULL;
+    bool ret = AcceptBlock(*pblock, state, chainparams, &pindex, fRequested, dbp);
+    if (pindex && pfrom) {
+        mapBlockSource[pindex->GetBlockHash()] = pfrom->GetId();
+    }
+    CheckBlockIndex(chainparams.GetConsensus());
+    if (!ret)
+        return error("%s: AcceptBlock FAILED", __func__);
 
     if (!ActivateBestChain(state, chainparams, pblock))
         return error("%s: ActivateBestChain failed", __func__);
@@ -4301,7 +4333,11 @@ bool GetProofForName(const CBlockIndex* pindexProof, const std::string& name, CC
 
 void UnloadBlockIndex()
 {
-    LOCK(cs_main);
+    if (!cs_main.is_locked()){
+        LOCK(cs_main);
+        UnloadBlockIndex();
+        return;
+    }
     setBlockIndexCandidates.clear();
     chainActive.SetTip(NULL);
     pindexBestInvalid = NULL;
@@ -4343,7 +4379,10 @@ bool LoadBlockIndex()
 
 bool InitBlockIndex(const CChainParams& chainparams) 
 {
-    LOCK(cs_main);
+    if (!cs_main.is_locked()) {
+        LOCK(cs_main);
+        return InitBlockIndex(chainparams);
+    }
 
     // Initialize global variables that cannot be constructed at startup.
     recentRejects.reset(new CRollingBloomFilter(120000, 0.000001));
@@ -4492,7 +4531,11 @@ void static CheckBlockIndex(const Consensus::Params& consensusParams)
         return;
     }
 
-    LOCK(cs_main);
+    if (!cs_main.is_locked()) {
+        LOCK(cs_main);
+        CheckBlockIndex(consensusParams);
+        return;
+    }
 
     // During a reindex, we read the genesis block and call CheckBlockIndex before ActivateBestChain,
     // so we have the genesis block in mapBlockIndex but no active chain.  (A few of the tests when
