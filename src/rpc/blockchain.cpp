@@ -152,7 +152,7 @@ UniValue getblockcount(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblockcount", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
     return chainActive.Height();
 }
 
@@ -169,7 +169,7 @@ UniValue getbestblockhash(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getbestblockhash", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
     return chainActive.Tip()->GetBlockHash().GetHex();
 }
 
@@ -186,7 +186,7 @@ UniValue getdifficulty(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getdifficulty", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
     return GetDifficulty();
 }
 
@@ -302,7 +302,7 @@ UniValue getblockhash(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblockhash", "1000")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     int nHeight = params[0].get_int();
     if (nHeight < 0 || nHeight > chainActive.Height())
@@ -346,7 +346,7 @@ UniValue getblockheader(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblockheader", "\"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09\"")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     std::string strHash = params[0].get_str();
     uint256 hash(uint256S(strHash));
@@ -411,7 +411,7 @@ UniValue getblock(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblock", "\"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09\"")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     std::string strHash = params[0].get_str();
     uint256 hash(uint256S(strHash));
@@ -573,7 +573,7 @@ UniValue gettxout(const UniValue& params, bool fHelp)
             + HelpExampleRpc("gettxout", "\"txid\", 1")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     UniValue ret(UniValue::VOBJ);
 
@@ -738,7 +738,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblockchaininfo", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("chain",                 Params().NetworkIDString()));
@@ -821,7 +821,7 @@ UniValue getchaintips(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getchaintips", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     /* Build up a list of chain tips.  We start with the list of all
        known blocks, and successively remove blocks that appear as pprev

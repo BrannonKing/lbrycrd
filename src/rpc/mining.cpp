@@ -110,7 +110,7 @@ UniValue getnetworkhashps(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getnetworkhashps", "")
        );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
     return GetNetworkHashPS(params.size() > 0 ? params[0].get_int() : 120, params.size() > 1 ? params[1].get_int() : -1);
 }
 
@@ -129,7 +129,7 @@ UniValue getgenerate(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getgenerate", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
     return GetBoolArg("-gen", DEFAULT_GENERATE);
 }
 
@@ -322,7 +322,7 @@ UniValue getmininginfo(const UniValue& params, bool fHelp)
         );
 
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("blocks",           (int)chainActive.Height()));
@@ -454,7 +454,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getblocktemplate", "")
          );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     std::string strMode = "template";
     UniValue lpval = NullUniValue;

@@ -20,7 +20,7 @@ static bool falseFunc() { return false; }
 BOOST_AUTO_TEST_CASE(PartitionAlert)
 {
     // Test PartitionCheck
-    CCriticalSection csDummy;
+    CMainCriticalSection csDummy;
     CBlockIndex indexDummy[2000];
     CChainParams& params = Params(CBaseChainParams::MAIN);
     int64_t nPowTargetSpacing = params.GetConsensus().nPowTargetSpacing;

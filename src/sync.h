@@ -12,6 +12,7 @@
 #include <boost/thread/locks.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
+#include "recursive_shared_mutex.h"
 
 
 ////////////////////////////////////////////////
@@ -98,6 +99,7 @@ public:
 };
 
 typedef CCriticalSection CDynamicCriticalSection;
+typedef RecursiveSharedMutex CMainCriticalSection;
 /** Wrapped boost mutex: supports waiting but not recursive locking */
 typedef AnnotatedMixin<boost::mutex> CWaitableCriticalSection;
 
@@ -169,11 +171,10 @@ public:
     }
 };
 
-typedef CMutexLock<CCriticalSection> CCriticalBlock;
-
-#define LOCK(cs) CCriticalBlock criticalblock(cs, #cs, __FILE__, __LINE__)
-#define LOCK2(cs1, cs2) CCriticalBlock criticalblock1(cs1, #cs1, __FILE__, __LINE__), criticalblock2(cs2, #cs2, __FILE__, __LINE__)
-#define TRY_LOCK(cs, name) CCriticalBlock name(cs, #cs, __FILE__, __LINE__, true)
+#define LOCK(cs) CMutexLock<std::remove_reference<decltype(cs)>::type> criticalblock(cs, #cs, __FILE__, __LINE__)
+#define LOCK2(cs1, cs2) CMutexLock<std::remove_reference<decltype(cs1)>::type> criticalblock1(cs1, #cs1, __FILE__, __LINE__); CMutexLock<std::remove_reference<decltype(cs2)>::type> criticalblock2(cs2, #cs2, __FILE__, __LINE__)
+#define TRY_LOCK(cs, name) CMutexLock<std::remove_reference<decltype(cs)>::type> name(cs, #cs, __FILE__, __LINE__, true)
+#define LOCK_SHARED(cs) boost::shared_lock_guard<RecursiveSharedMutex> sharedblock(cs);
 
 #define ENTER_CRITICAL_SECTION(cs)                            \
     {                                                         \

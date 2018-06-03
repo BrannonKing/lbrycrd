@@ -191,6 +191,7 @@ struct ClaimTrieChainFixture{
 
 
     void CommitTx(CMutableTransaction &tx){
+        LOCK(cs_main);
         num_txs_for_next_block++;
         num_txs++;
         if(num_txs > coinbase_txs.size())
@@ -273,6 +274,7 @@ struct ClaimTrieChainFixture{
     {
         for (int i = 0; i < num_blocks; ++i)
         {
+            LOCK(cs_main);
             CBlockTemplate *pblocktemplate;
             CScript coinbase_scriptpubkey; 
             coinbase_scriptpubkey << CScriptNum(chainActive.Height());
@@ -290,7 +292,8 @@ struct ClaimTrieChainFixture{
     //disconnect i blocks from tip
     void DecrementBlocks(int num_blocks)
     {
-        for(int i = 0; i< num_blocks; i++){                    
+        for(int i = 0; i< num_blocks; i++){
+            LOCK(cs_main);
             CValidationState state;
             CBlockIndex* pblockindex = chainActive.Tip();
             InvalidateBlock(state, Params().GetConsensus(), pblockindex);
@@ -314,6 +317,7 @@ struct ClaimTrieChainFixture{
         // this will simulate restart of lbrycrdd by writing the claimtrie to disk,
         // clearing the-in memory claimtrie, and then reading the saved claimtrie
         // from disk
+        LOCK(cs_main);
         pclaimTrie->WriteToDisk();
         pclaimTrie->clear();
         pclaimTrie->ReadFromDisk(true);
@@ -607,6 +611,8 @@ BOOST_AUTO_TEST_CASE(claimtriebranching_support_spend)
     tx.vin[1].nSequence = std::numeric_limits<unsigned int>::max();
     tx.vout[0].scriptPubKey = CScript() << OP_TRUE;
     tx.vout[0].nValue = 1;
+
+    LOCK(cs_main);
 
     fixture.CommitTx(tx); 
     fixture.IncrementBlocks(1);

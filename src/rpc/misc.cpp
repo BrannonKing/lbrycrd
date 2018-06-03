@@ -72,7 +72,7 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
     LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
 #else
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 #endif
 
     proxyType proxy;
@@ -175,7 +175,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
     LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
 #else
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 #endif
 
     CBitcoinAddress address(params[0].get_str());
@@ -335,7 +335,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
             + HelpExampleRpc("verifymessage", "\"1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XZ\", \"signature\", \"my message\"")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     string strAddress  = params[0].get_str();
     string strSign     = params[1].get_str();

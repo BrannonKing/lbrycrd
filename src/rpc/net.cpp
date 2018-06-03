@@ -127,7 +127,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getpeerinfo", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     vector<CNodeStats> vstats;
     CopyNodeStats(vstats);
@@ -486,7 +486,7 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getnetworkinfo", "")
         );
 
-    LOCK(cs_main);
+    LOCK_SHARED(cs_main);
 
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("version",       CLIENT_VERSION));

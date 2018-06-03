@@ -84,7 +84,7 @@ void AddToMempool(CMutableTransaction& tx)
     //BOOST_CHECK(CheckSequenceLocks(tx, STANDARD_LOCKTIME_VERIFY_FLAGS, &lp));
     //mempool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(tx, 0, GetTime(), 111.1, chainActive.Height(), mempool.HasNoInputsOf(tx), 10000000000, false, nSigOps, lp));
     CValidationState state;
-    bool *fMissingInputs;
+    bool *fMissingInputs = nullptr;
     CFeeRate txFeeRate = CFeeRate(0);
     BOOST_CHECK(AcceptToMemoryPool(mempool, state, tx, false, fMissingInputs, &txFeeRate));
     //TestMemPoolEntryHelper entry;

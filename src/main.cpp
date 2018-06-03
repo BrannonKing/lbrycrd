@@ -56,7 +56,7 @@ using namespace std;
  * Global state
  */
 
-CCriticalSection cs_main;
+CMainCriticalSection cs_main;
 
 BlockMap mapBlockIndex;
 CChain chainActive;
@@ -2285,7 +2285,7 @@ void ThreadScriptCheck() {
 // we're being fed a bad chain (blocks being generated much
 // too slowly or too quickly).
 //
-void PartitionCheck(bool (*initialDownloadCheck)(), CCriticalSection& cs, const CBlockIndex *const &bestHeader,
+void PartitionCheck(bool (*initialDownloadCheck)(), CMainCriticalSection& cs, const CBlockIndex *const &bestHeader,
                     int64_t nPowTargetSpacing)
 {
     if (bestHeader == NULL || initialDownloadCheck()) return;
