@@ -172,9 +172,9 @@ public:
 };
 
 #define LOCK(cs) CMutexLock<std::remove_reference<decltype(cs)>::type> criticalblock(cs, #cs, __FILE__, __LINE__)
-#define LOCK2(cs1, cs2) CMutexLock<std::remove_reference<decltype(cs1)>::type> criticalblock1(cs1, #cs1, __FILE__, __LINE__); CMutexLock<std::remove_reference<decltype(cs2)>::type> criticalblock2(cs2, #cs2, __FILE__, __LINE__)
+#define LOCK2(cs1, cs2) CMutexLock<std::remove_reference<decltype(cs1)>::type> criticalblock1(cs1, #cs1, __FILE__, __LINE__); CMutexLock<CCriticalSection> criticalblock2(cs2, #cs2, __FILE__, __LINE__)
 #define TRY_LOCK(cs, name) CMutexLock<std::remove_reference<decltype(cs)>::type> name(cs, #cs, __FILE__, __LINE__, true)
-#define LOCK_SHARED(cs) boost::shared_lock_guard<RecursiveSharedMutex> sharedblock(cs);
+#define LOCK_SHARED(cs) boost::shared_lock<RecursiveSharedMutex> sharedblock(cs);
 
 #define ENTER_CRITICAL_SECTION(cs)                            \
     {                                                         \
